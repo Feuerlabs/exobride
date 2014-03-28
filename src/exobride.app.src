@@ -1,0 +1,12 @@
+{application, exobride,
+ [
+  {description, "Exobride"},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { exobride_app, []}},
+  {env, []}
+ ]}.
