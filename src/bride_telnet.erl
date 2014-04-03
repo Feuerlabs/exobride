@@ -106,6 +106,13 @@ handle_call({connect_local_server, CBPid, CBRef}, _From, St) ->
 				cb_ref = CBRef } };
 
 	{ error, Reason } ->
+	    %% Tell the groom what went wrong.
+	    CBPid ! 
+		{ bride_data, 
+		  self(),
+		  CBRef,
+		  io_lib:format("Connect to bride-side telnet server failed: ~p~n",
+				[Reason]) },
 	    {reply, { error, Reason}, St }
     end;
 
@@ -116,11 +123,11 @@ handle_call({send_local_server, Data}, _From, St) ->
 	
 	{ error, Reason } ->
 	    St#st.cb_pid ! { bride_disconnect, St#st.cb_ref, error, Reason},
-	    {stop, { error, Reason}, St#st { } }
+	    {stop, normal, { error, Reason}, St#st { } }
     end;
 
 handle_call(disconnect_local_server, _From, _St) ->
-    {stop,  ok, #st {} };
+    {stop, normal, ok, #st {} };
 
 handle_call(_Request, _From, St) ->
     {reply, ok, St}.
@@ -150,24 +157,32 @@ handle_cast(_Msg, State) ->
 %%--------------------------------------------------------------------
 
 handle_info({tcp_closed, _Socket}, State) ->
-    State#st.cb_pid ! { bride_disconnect, cb_ref, closed},
-    {stop, State#st { local_socket = nil }};
+    io:format("Telnet server closed connection. Reporting to router~n"),
+    State#st.cb_pid ! { bride_disconnect, self(), State#st.cb_ref, closed},
+    {stop, normal, State#st { local_socket = nil }};
     
 handle_info({tcp_error, _Socket, Reason}, State) ->
-    State#st.cb_pid ! { bride_disconnect, cb_ref, error, Reason},
-    {stop, State#st { local_socket = nil }};
+    State#st.cb_pid ! { bride_disconnect, self(), State#st.cb_ref, {error, Reason}},
+    {stop, normal, State#st { local_socket = nil }};
 
 handle_info({tcp, _Socket, Data}, State) ->
     io:format("bride_telnet: Got data from telnet server: ~p. Sending to ~p~n", 
 	      [ Data, State#st.cb_pid ]),
-    State#st.cb_pid ! { bride_data, Data},
+    State#st.cb_pid ! { bride_data, self(), State#st.cb_ref, Data},
     {noreply, State};
 
 %% Process data from the router client connected to the groom.
-handle_info({router_server_data, Ref, Data}, State) ->
-    io:format("bride_telnet: Got data from Router ~p: ~p~n", [ Ref, Data ]),
+handle_info({router_client_data, Ref, Data}, State) ->
+    io:format("bride_telnet: Got data from router ~p: ~p~n", [ Ref, Data ]),
     gen_tcp:send(State#st.local_socket, Data),
     {noreply, State};
+
+handle_info({router_client_disconnect, Ref}, State) ->
+    io:format("bride_telnet: Got disconnect from router ~p. Disconenct and terminate session~n",
+	      [ Ref ]),
+    gen_tcp:shutdown(State#st.local_socket, read_write),
+    gen_tcp:close(State#st.local_socket),
+    {stop, normal, State};
     
 handle_info(Info, State) ->
     io:format("bride_telnet: Wut?[~p]~n", [ Info ]),
@@ -186,7 +201,7 @@ handle_info(Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 terminate(Reason, St) ->
-    io:format("bride_telnet: terminate[~p]~n", [ Reason ]),
+    io:format("bride_telnet: terminate: ~p~n", [ Reason ]),
     if St#st.local_socket =/= nil ->
        gen_tcp:shutdown(St#st.local_socket, read_write),
        gen_tcp:close(St#st.local_socket);

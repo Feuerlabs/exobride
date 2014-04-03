@@ -107,6 +107,7 @@ handle_call({router_send_server, Data}, _From, St) ->
 
 
 handle_call(disconnect_server, _From, St) ->
+    io:format("router_client_simple: Will disconnect router server~n"),
     case St#st.sock of 
 	nil -> true;
 
@@ -114,7 +115,7 @@ handle_call(disconnect_server, _From, St) ->
 	    gen_tcp:shutdown(St#st.sock, read_write),
 	    gen_tcp:close(St#st.sock)
     end,
-    { stop, ok, #st{}};
+    { stop, normal, ok, #st{}};
 
 
 
@@ -147,15 +148,30 @@ handle_cast(_Msg, State) ->
 handle_info( {tcp, _Socket, Data }, St) ->
     io:format("router_client_simple: Received ~p router server. Fwd to bride ~p~n",
 	      [Data, St#st.cb_pid]),
-    St#st.cb_pid ! { router_server_data, St#st.cb_arg, Data },
+    St#st.cb_pid ! { router_client_data, St#st.cb_arg, Data },
     { noreply, St };
 
+handle_info( {tcp_closed, Socket }, St) ->
+    io:format("router_client_simple: Router server disconnected. Fwd to bride ~p~n",
+	      [St#st.cb_pid]),
+    St#st.cb_pid ! { router_client_disconnect, St#st.cb_arg },
+    gen_tcp:close(Socket),
+    { stop, normal, St };
+
 %% Receive data from the linked bride
-handle_info( { bride_data, Data}, St) ->
+handle_info( { bride_data,  _From, _Ref, Data}, St) ->
     io:format("router_client_simple: Received ~p from bride. Fwd to router server~n",
 	      [Data]),
     gen_tcp:send(St#st.sock, Data),
     { noreply, St };
+
+handle_info( { bride_disconnect, _From, _Ref, Reason}, St) ->
+    io:format("router_client_simple: Bride disconnected: ~p. Kill socket and die.~n",
+	      [Reason]),
+
+    gen_tcp:shutdown(St#st.sock, read_write),
+    gen_tcp:close(St#st.sock),
+    { stop, normal, St };
 
 
 handle_info(_Info, State) ->

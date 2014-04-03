@@ -24,5 +24,6 @@ application:start(sasl).
 
 exobride:start([{ simple, bride_telnet, [ {host, {127,0,0,1}}, {port, 5555 } ], sideband_receiver_simple, [], router_client_simple, [ {router_server_address, { 127,0,0,1 }}, { router_server_port, 4711 }]}]).
 
+
 Simulate a telnet server that the bride_telnet module will connect to
 $ nc -l 5555

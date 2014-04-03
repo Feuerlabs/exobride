@@ -10,8 +10,8 @@
 -type ok()          :: {ok, data()}.
 -type ref()         :: pid().
 -type cb_pid()      :: pid().
--type cb_arg()       :: any().
--type key()       :: any().
+-type cb_arg()      :: any().
+-type key()         :: any().
 
 -callback start(cb_pid(), cb_arg(), key(), options()) ->
     { ok, ref() } | error().

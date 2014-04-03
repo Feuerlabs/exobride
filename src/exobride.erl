@@ -1,4 +1,4 @@
-%%%---- BEGIN COPYRIGHT -------------------------------------------------------
+%%---- BEGIN COPYRIGHT -------------------------------------------------------
 %%
 %%% Copyright (C) 2012 Feuerlabs, Inc. All rights reserved.
 %%%
@@ -178,8 +178,9 @@ handle_info({ sideband_wakeup, _From, Service, _IP, _Port, Key }, St) ->
 			BrErr ->
 			    io:format("exogroom: Failed to connect to local service(~p): ~p~n", 
 				      [ Service, BrErr ]),
-			    BrMod:disconnect_local_server(BrPid), %% Wills stop router
-			    RtMod:stop(BrPid),
+			    %% Will stop router
+			    BrMod:disconnect_local_server(BrPid), 
+			    RtMod:disconnect_server(RtPid),
 			    { noreply, St }
 		    end;
 
